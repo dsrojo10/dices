@@ -68,6 +68,8 @@
         .winner { background-color: #e8f5e9; }
         .second { background-color: #f5f5f5; }
         .third { background-color: #fafafa; }
+        .first-place { background-color: #a8e6cf; } /* Color verde más fuerte para el primero */
+        .second-place { background-color: #ffeb3b; } /* Color amarillo más fuerte para el segundo */
     </style>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/peerjs@1.3.2/dist/peerjs.min.js"></script>
@@ -111,6 +113,7 @@
         </div>
         <div class="dice-result" id="diceResult"></div>
         <button class="btn" id="logDiceBtn">Log Dice</button>
+        <button class="btn" id="clearLastDiceBtn">Clear Last Dice</button> <!-- Nuevo botón -->
         <table id="diceResultsTable">
             <thead>
                 <tr id="playerHeaders">
@@ -354,6 +357,13 @@
         }
     });
 
+    document.getElementById('clearLastDiceBtn').addEventListener('click', () => {
+        if (diceResults.length > 0) {
+            diceResults.pop(); // Eliminar el último resultado de dados
+            document.getElementById('diceResult').innerHTML = diceResults.map(num => `<div>${num}</div>`).join(''); // Actualizar la visualización
+        }
+    });
+
     function updateTable(round, player, total) {
         const tableBody = document.getElementById('diceResultsBody');
         let existingRow = Array.from(tableBody.rows).find(row => row.cells[0].innerText == round.toString());
@@ -393,9 +403,8 @@
 
         playerNames.forEach(name => {
             const playerData = playerDataMap.get(name);
-            const rankClass = playerData.rank === 1 ? 'winner' : 
-                            playerData.rank === 2 ? 'second' : 
-                            playerData.rank === 3 ? 'third' : '';
+            const rankClass = playerData.rank === 1 ? 'first-place' : 
+                            playerData.rank === 2 ? 'second-place' : '';
 
             const pointsNeededText = playerData.rank === 1 ? 
                 '(1st place)' : 
@@ -433,7 +442,8 @@
                 players: numPlayers,
                 rounds: numRounds,
                 dice: numDice,
-                forbiddenNumber: forbiddenNumber},
+                forbiddenNumber: forbiddenNumber
+            },
             rounds: gameData,
             winner: winner // Incluyendo la información del ganador
         };
@@ -469,38 +479,46 @@
         updateTotals(scores);
     });
 
-    // Función para reiniciar los datos del juego
-    function resetGameData() {
-        currentRound = 1;
-        currentPlayer = 1;
-        scores = Array(numPlayers).fill(0);
-        diceResults = [];
-        gameData = [];
+// Función para reiniciar los datos del juego
+function resetGameData() {
+    currentRound = 1;
+    currentPlayer = 1;
+    scores = Array(numPlayers).fill(0);
+    diceResults = [];
+    gameData = [];
 
-        // Limpiar la UI
-        document.getElementById('diceResult').innerHTML = '';
-        document.getElementById('diceResultsBody').innerHTML = '';
-        updateTotals(scores);
-        const playerHeaders = document.getElementById('playerHeaders');
-        playerHeaders.innerHTML = '<th>Turno</th>';
-        playerNames.forEach(name => {
-            playerHeaders.innerHTML += `<th>${name}</th>`;
-        });
+    // Limpiar la UI
+    document.getElementById('diceResult').innerHTML = '';
+    document.getElementById('diceResultsBody').innerHTML = '';
+    updateTotals(scores);
+    const playerHeaders = document.getElementById('playerHeaders');
+    playerHeaders.innerHTML = '<th>Turno</th>';
+    playerNames.forEach(name => {
+        playerHeaders.innerHTML += `<th>${name}</th>`;
+    });
+}
+
+// Event listener para el botón "Clear Last Dice"
+document.getElementById('clearLastDiceBtn').addEventListener('click', () => {
+    if (diceResults.length > 0) {
+        diceResults.pop(); // Eliminar el último resultado de dados
+        document.getElementById('diceResult').innerHTML = diceResults.map(num => `<div>${num}</div>`).join(''); // Actualizar la visualización
     }
+});
 
-    window.addEventListener('load', () => {
-        const urlParams = new URLSearchParams(window.location.search);
-        const connectId = urlParams.get('connect');
-        if (connectId) {
-            document.getElementById('peer-id').value = connectId;
-            connectToPeer();
-        }
-    });
+window.addEventListener('load', () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const connectId = urlParams.get('connect');
+    if (connectId) {
+        document.getElementById('peer-id').value = connectId;
+        connectToPeer();
+    }
+});
 
-    peer.on('error', (err) => {
-        document.getElementById('status').textContent = `Error: ${err.type}`;
-        console.error(err);
-    });
+peer.on('error', (err) => {
+    document.getElementById('status').textContent = `Error: ${err.type}`;
+    console.error(err);
+});
 </script>
 
 </body>
