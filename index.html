@@ -141,7 +141,8 @@
     
     <div class="download hidden">
         <button class="btn" id="downloadBtn">Download Game Data</button>
-        <button class="btn" id="newGameBtn">New Game</button>
+        <button class="btn" id="newGameSetupBtn">New Game (New Setup)</button>
+        <button class="btn" id="replayBtn">Replay</button>
     </div>
 </div>
 
@@ -395,8 +396,6 @@
             const rankClass = playerData.rank === 1 ? 'winner' : 
                             playerData.rank === 2 ? 'second' : 
                             playerData.rank === 3 ? 'third' : '';
-            
-            // Continuing the updateTotals function:
 
             const pointsNeededText = playerData.rank === 1 ? 
                 '(1st place)' : 
@@ -424,18 +423,70 @@
     }
 
     function downloadGameData() {
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(gameData));
+        // Determinar el ganador basado en el puntaje más alto
+        const winnerIndex = scores.indexOf(Math.max(...scores));
+        const winner = playerNames[winnerIndex];
+
+        const exportData = {
+            timestamp: new Date().toISOString(),
+            gameConfig: {
+                players: numPlayers,
+                rounds: numRounds,
+                dice: numDice,
+                forbiddenNumber: forbiddenNumber},
+            rounds: gameData,
+            winner: winner // Incluyendo la información del ganador
+        };
+
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData));
         const downloadAnchorNode = document.createElement('a');
         downloadAnchorNode.setAttribute("href", dataStr);
-        downloadAnchorNode.setAttribute("download", "game_data.json");
+        downloadAnchorNode.setAttribute("download", `game_data_${Date.now()}.json`);
         document.body.appendChild(downloadAnchorNode);
         downloadAnchorNode.click();
         downloadAnchorNode.remove();
     }
 
-    document.getElementById('newGameBtn').addEventListener('click', () => {
-        location.reload();
+    // Event listener para el botón "New Game (New Setup)"
+    document.getElementById('newGameSetupBtn').addEventListener('click', () => {
+        location.reload(); // Recargar la página para una nueva configuración
     });
+
+    // Event listener para el botón "Replay"
+    document.getElementById('replayBtn').addEventListener('click', () => {
+        // Reiniciar el juego con la configuración actual
+        resetGameData();
+        startGame({
+            numPlayers: numPlayers,
+            numRounds: numRounds,
+            numDice: numDice,
+            forbiddenNumber: forbiddenNumber
+        });
+        document.querySelector('.download').classList.add('hidden');
+        document.querySelector('.game-display').classList.remove('hidden');
+        document.querySelector('.dice-input').classList.remove('hidden');
+        updateGameStatus();
+        updateTotals(scores);
+    });
+
+    // Función para reiniciar los datos del juego
+    function resetGameData() {
+        currentRound = 1;
+        currentPlayer = 1;
+        scores = Array(numPlayers).fill(0);
+        diceResults = [];
+        gameData = [];
+
+        // Limpiar la UI
+        document.getElementById('diceResult').innerHTML = '';
+        document.getElementById('diceResultsBody').innerHTML = '';
+        updateTotals(scores);
+        const playerHeaders = document.getElementById('playerHeaders');
+        playerHeaders.innerHTML = '<th>Turno</th>';
+        playerNames.forEach(name => {
+            playerHeaders.innerHTML += `<th>${name}</th>`;
+        });
+    }
 
     window.addEventListener('load', () => {
         const urlParams = new URLSearchParams(window.location.search);
