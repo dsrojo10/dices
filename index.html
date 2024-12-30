@@ -175,7 +175,14 @@
     const peer = new Peer(generateShortId(), {
         host: '0.peerjs.com',
         port: 443,
-        path: '/'
+        path: '/',
+        secure: true,
+        config: {
+            'iceServers': [
+                { url: 'stun:stun.l.google.com:19302' },
+                { url: 'turn:your-turn-server.com', username: 'username', credential: 'password' }
+            ]
+        }
     });
 
     peer.on('open', (id) => {
@@ -235,6 +242,16 @@
             } else if (data.type === 'endGame') {
                 endGame(data.winner);
             }
+        });
+
+        conn.on('error', (err) => {
+            document.getElementById('status').textContent = `Error: ${err.type}`;
+            console.error(err);
+        });
+
+        conn.on('close', () => {
+            document.getElementById('status').textContent = 'Estado: Conexión cerrada';
+            console.warn('Connection closed');
         });
     }
 
@@ -548,10 +565,6 @@
 
     // Función para finalizar el juego y mostrar el ganador claramente
     function endGame(winner) {
-        // Eliminar la línea de alerta
-        // alert(`Game Over! Winner: ${winner}`);
-        
-        // Mostrar el ganador en un elemento HTML
         const gameStatus = document.getElementById('gameStatus');
         gameStatus.innerHTML = `<h2 style="color: green;">Game Over! Winner: ${winner}</h2>`;
 
@@ -560,63 +573,6 @@
         document.querySelector('.dice-input').classList.add('hidden');
         document.querySelector('.download').classList.remove('hidden');
         downloadGameData();
-    }
-
-    // Función para calcular las posiciones de los jugadores, manejando empates
-    function updateTotals(scores) {
-        let playerScores = scores.map((score, index) => ({
-            name: playerNames[index],
-            score: score,
-            originalIndex: index
-        }));
-
-        // Ordenar los puntajes en orden descendente
-        playerScores.sort((a, b) => b.score - a.score);
-
-        // Manejar empates en las posiciones
-        let rank = 1;
-        playerScores.forEach((player, index) => {
-            if (index > 0 && player.score < playerScores[index - 1].score) {
-                rank = index + 1;
-            }
-            player.rank = rank;
-        });
-
-        const highestScore = playerScores[0].score;
-
-        const totalRow = document.getElementById('totalRow');
-        totalRow.innerHTML = '<th>Total:</th>';
-        
-        const playerDataMap = new Map(playerScores.map(p => [p.name, p]));
-
-        playerNames.forEach(name => {
-            const playerData = playerDataMap.get(name);
-            const rankClass = playerData.rank === 1 ? 'first-place' : 
-                            playerData.rank === 2 ? 'second-place' : '';
-
-            const pointsNeededText = playerData.rank === 1 ? 
-                '(1st place)' : 
-                `(${playerData.rank}th place, -${highestScore - playerData.score} pts)`;
-
-            totalRow.innerHTML += `
-                <th id="total${name.replace(/\s+/g, '')}" class="${rankClass}">
-                    ${playerData.score}<br>
-                    <small>${pointsNeededText}</small>
-                </th>`;
-        });
-
-        const scoreBoard = document.getElementById('scoreBoard');
-        scoreBoard.innerHTML = '';
-        playerScores.forEach(player => {
-            const pointsNeededText = player.rank === 1 ? 
-                '(1st place)' : 
-                `(${player.rank}th place, needs ${highestScore - player.score} pts)`;
-                
-            scoreBoard.innerHTML += `
-                <div class="${player.rank === 1 ? 'winner' : ''}">
-                    ${player.name}: ${player.score} ${pointsNeededText}
-                </div>`;
-        });
     }
 
     // Agregar un botón para dirigir a la página index2.html
