@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PeerJS Simple Chat</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; padding: 0 20px; }
+        .status { padding: 10px; margin: 10px 0; background: #f0f0f0; border-radius: 4px; }
+        #messages { height: 300px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; margin: 10px 0; }
+        .connection-info { background: #e8f5e9; padding: 15px; border-radius: 4px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>PeerJS Chat</h1>
+
+    <div class="connection-info">
+        <h3>Cómo conectar:</h3>
+        <ol>
+            <li>Tu ID: <span id="my-id">Conectando...</span></li>
+            <li>Para conectar con otro peer: 
+                <input type="text" id="peer-id" placeholder="Ingresa el ID del otro peer">
+                <button onclick="connectToPeer()">Conectar</button>
+            </li>
+        </ol>
+    </div>
+
+    <div class="status" id="status">Estado: Inicializando...</div>
+
+    <div>
+        <h3>Chat:</h3>
+        <div id="messages"></div>
+        <input type="text" id="messageInput" placeholder="Escribe un mensaje...">
+        <button onclick="sendMessage()">Enviar</button>
+    </div>
+
+    <script>
+        let conn;
+        const peer = new Peer();
+        
+        // Cuando obtenemos nuestro ID
+        peer.on('open', (id) => {
+            document.getElementById('my-id').textContent = id;
+            document.getElementById('status').textContent = 'Estado: Listo para conectar';
+        });
+
+        // Cuando recibimos una conexión
+        peer.on('connection', (connection) => {
+            conn = connection;
+            setupConnection();
+            document.getElementById('status').textContent = 'Estado: Conectado!';
+        });
+
+        function connectToPeer() {
+            const peerId = document.getElementById('peer-id').value;
+            conn = peer.connect(peerId);
+            setupConnection();
+        }
+
+        function setupConnection() {
+            conn.on('open', () => {
+                document.getElementById('status').textContent = 'Estado: Conectado!';
+                document.getElementById('messageInput').disabled = false;
+            });
+
+            conn.on('data', (data) => {
+                const messages = document.getElementById('messages');
+                messages.innerHTML += `<div>Recibido: ${data}</div>`;
+                messages.scrollTop = messages.scrollHeight;
+            });
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value;
+
+            if (message && conn && conn.open) {
+                conn.send(message);
+                const messages = document.getElementById('messages');
+                messages.innerHTML += `<div>Enviado: ${message}</div>`;
+                messages.scrollTop = messages.scrollHeight;
+                input.value = '';
+            }
+        }
+
+        // Manejar Enter en el input de mensaje
+        document.getElementById('messageInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        // Manejar errores
+        peer.on('error', (err) => {
+            document.getElementById('status').textContent = `Error: ${err.type}`;
+            console.error(err);
+        });
+    </script>
+</body>
+</html>
