@@ -69,8 +69,8 @@
         .winner { background-color: #e8f5e9; }
         .second { background-color: #f5f5f5; }
         .third { background-color: #fafafa; }
-        .first-place { background-color: #a8e6cf; } /* Color verde más fuerte para el primero */
-        .second-place { background-color: #ffeb3b; } /* Color amarillo más fuerte para el segundo */
+        .first-place { background-color: #a8e6cf; }
+        .second-place { background-color: #ffeb3b; }
         .winner-message {
             font-size: 2em;
             font-weight: bold;
@@ -172,7 +172,11 @@
         return Math.random().toString(36).substr(2, 6);
     }
 
-    const peer = new Peer(generateShortId());
+    const peer = new Peer(generateShortId(), {
+        host: '0.peerjs.com',
+        port: 443,
+        path: '/'
+    });
 
     peer.on('open', (id) => {
         const displayId = id;
@@ -400,7 +404,6 @@
         playerCell.innerText = total;
     }
 
-    // Función para calcular las posiciones de los jugadores, manejando empates
     function updateTotals(scores) {
         let playerScores = scores.map((score, index) => ({
             name: playerNames[index],
@@ -408,10 +411,8 @@
             originalIndex: index
         }));
 
-        // Ordenar los puntajes en orden descendente
         playerScores.sort((a, b) => b.score - a.score);
 
-        // Manejar empates en las posiciones
         let rank = 1;
         playerScores.forEach((player, index) => {
             if (index > 0 && player.score < playerScores[index - 1].score) {
@@ -627,3 +628,5 @@
     });
     document.querySelector('.download').appendChild(goToIndex2Btn);
 </script>
+</body>
+</html>
