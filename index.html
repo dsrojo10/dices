@@ -10,9 +10,7 @@
             margin: 20px auto;
             padding: 0 20px;
         }
-        .hidden {
-            display: none;
-        }
+        .hidden { display: none; }
         .status {
             padding: 10px;
             margin: 10px 0;
@@ -24,9 +22,7 @@
             flex-direction: column;
             align-items: center;
         }
-        .score-board div, .dice-result div {
-            margin: 5px 0;
-        }
+        .score-board div, .dice-result div { margin: 5px 0; }
         .dice-result {
             display: flex;
             justify-content: center;
@@ -49,23 +45,38 @@
             margin-top: 20px;
             border-collapse: collapse;
         }
-        table, th, td {
-            border: 1px solid black;
-        }
+        table, th, td { border: 1px solid black; }
         th, td {
             padding: 10px;
             text-align: center;
         }
+        .qr-code {
+            margin: 20px 0;
+            text-align: center;
+        }
+        #qrcode {
+            display: inline-block;
+            padding: 10px;
+            background: white;
+            border-radius: 4px;
+        }
+        .short-id {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .winner { background-color: #e8f5e9; }
+        .second { background-color: #f5f5f5; }
+        .third { background-color: #fafafa; }
     </style>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/peerjs@1.3.2/dist/peerjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 </head>
 <body>
-
 <div class="container">
     <h1>Family Dice Game</h1>
-
-    <!-- Game Configuration -->
+    
     <div class="game-config">
         <h2>Game Configuration</h2>
         <label>Number of Players: <input type="number" id="numPlayers" min="1" max="10" value="6"></label><br>
@@ -75,21 +86,18 @@
         <button class="btn" id="setupPlayersBtn">Setup Players</button>
     </div>
 
-    <!-- Player Names Input -->
     <div class="player-names hidden">
         <h2>Enter Player Names</h2>
         <div id="playerNamesInputs"></div>
         <button class="btn" id="startGameBtn">Start Game</button>
     </div>
 
-    <!-- Game Display -->
     <div class="game-display hidden">
         <h2>Game Display</h2>
         <div id="gameStatus">Waiting for updates...</div>
         <div class="score-board" id="scoreBoard"></div>
     </div>
 
-    <!-- Dice Input -->
     <div class="dice-input hidden">
         <h2>Dice Input</h2>
         <div id="inputGameStatus">Round: 1, Player: 1</div>
@@ -103,15 +111,13 @@
         </div>
         <div class="dice-result" id="diceResult"></div>
         <button class="btn" id="logDiceBtn">Log Dice</button>
-        <!-- HTML Table for dice results -->
         <table id="diceResultsTable">
             <thead>
                 <tr id="playerHeaders">
                     <th>Turno</th>
                 </tr>
             </thead>
-            <tbody id="diceResultsBody">
-            </tbody>
+            <tbody id="diceResultsBody"></tbody>
             <tfoot>
                 <tr id="totalRow">
                     <th>Total:</th>
@@ -123,16 +129,16 @@
     <div class="status" id="status">Estado: Inicializando...</div>
     <div class="connection-info">
         <h3>Cómo conectar:</h3>
-        <ol>
-            <li>Tu ID: <span id="my-id">Conectando...</span></li>
-            <li>Para conectar con otro peer: 
-                <input type="text" id="peer-id" placeholder="Ingresa el ID del otro peer">
-                <button class="btn" onclick="connectToPeer()">Conectar</button>
-            </li>
-        </ol>
+        <div class="short-id">Tu ID: <span id="my-id">Conectando...</span></div>
+        <div class="qr-code">
+            <div id="qrcode"></div>
+        </div>
+        <div>
+            <input type="text" id="peer-id" placeholder="Ingresa el ID del otro peer">
+            <button class="btn" onclick="connectToPeer()">Conectar</button>
+        </div>
     </div>
     
-    <!-- Download and New Game Buttons -->
     <div class="download hidden">
         <button class="btn" id="downloadBtn">Download Game Data</button>
         <button class="btn" id="newGameBtn">New Game</button>
@@ -140,22 +146,32 @@
 </div>
 
 <script>
-    // Initialize game variables
     let numPlayers, numRounds, numDice, forbiddenNumber, currentRound, currentPlayer, scores, playerNames = [];
     let diceResults = [];
     let conn;
-    const peer = new Peer();
     let isHost = false;
     let isConnected = false;
     let gameData = [];
 
-    // When we get our ID
+    function generateShortId() {
+        return Math.random().toString(36).substr(2, 6);
+    }
+
+    const peer = new Peer(generateShortId());
+
     peer.on('open', (id) => {
-        document.getElementById('my-id').textContent = id;
+        const displayId = id;
+        document.getElementById('my-id').textContent = displayId;
+        
+        const gameUrl = `${window.location.href}?connect=${displayId}`;
+        const qr = qrcode(0, 'M');
+        qr.addData(gameUrl);
+        qr.make();
+        document.getElementById('qrcode').innerHTML = qr.createImgTag(5);
+        
         document.getElementById('status').textContent = 'Estado: Listo para conectar';
     });
 
-    // When receiving a connection
     peer.on('connection', (connection) => {
         conn = connection;
         isHost = true;
@@ -188,7 +204,6 @@
                 updateTable(data.round, data.player, data.total);
                 updateTotals(data.scores);
                 updateGameStatus();
-                updateScoreBoard();
             } else if (data.type === 'startGame') {
                 startGame(data.config);
                 playerNames = data.playerNames;
@@ -197,7 +212,7 @@
                 document.querySelector('.game-display').classList.remove('hidden');
                 document.querySelector('.dice-input').classList.remove('hidden');
                 updateGameStatus();
-                updateScoreBoard();
+                updateTotals(scores);
             }
         });
     }
@@ -228,7 +243,6 @@
         document.querySelector('.game-config').classList.add('hidden');
         document.querySelector('.player-names').classList.remove('hidden');
 
-        // Generate input fields for player names
         const playerNamesInputs = document.getElementById('playerNamesInputs');
         playerNamesInputs.innerHTML = '';
         for (let i = 0; i < numPlayers; i++) {
@@ -270,11 +284,10 @@
         document.querySelector('.game-display').classList.remove('hidden');
         document.querySelector('.dice-input').classList.remove('hidden');
         updateGameStatus();
-        updateScoreBoard();
+        updateTotals(scores);
     });
 
     function setupHeadersAndTotals() {
-        // Update table headers and total row with player names
         const playerHeaders = document.getElementById('playerHeaders');
         const totalRow = document.getElementById('totalRow');
         playerHeaders.innerHTML = '<th>Turno</th>';
@@ -285,22 +298,11 @@
         });
     }
 
-    // Update Game Status
     function updateGameStatus() {
         document.getElementById('gameStatus').innerHTML = `Round: ${currentRound} / ${numRounds}, Player: ${playerNames[currentPlayer - 1]}`;
         document.getElementById('inputGameStatus').innerHTML = `Round: ${currentRound}, Player: ${playerNames[currentPlayer - 1]}`;
     }
 
-    // Update Score Board
-    function updateScoreBoard() {
-        const scoreBoard = document.getElementById('scoreBoard');
-        scoreBoard.innerHTML = '';
-        scores.forEach((score, index) => {
-            scoreBoard.innerHTML += `<div>${playerNames[index]}: ${score}</div>`;
-        });
-    }
-
-    // Add Dice Result
     function addDiceResult(value) {
         if (diceResults.length < numDice) {
             diceResults.push(value);
@@ -308,14 +310,12 @@
         }
     }
 
-    // Log Dice Button Click
     document.getElementById('logDiceBtn').addEventListener('click', () => {
         if (diceResults.length !== numDice) {
             alert(`Please select ${numDice} dice results.`);
             return;
         }
 
-        // If any of the dice results is the forbidden number, set the total to 0
         let total = diceResults.includes(forbiddenNumber) ? 0 : diceResults.reduce((a, b) => a + b, 0);
         
         if (total !== 0) {
@@ -325,7 +325,6 @@
         updateTable(currentRound, currentPlayer, total);
         updateTotals(scores);
 
-        // Store game data
         gameData.push({
             round: currentRound,
             player: playerNames[currentPlayer - 1],
@@ -351,18 +350,14 @@
             downloadGameData();
         } else {
             updateGameStatus();
-            updateScoreBoard();
         }
     });
 
     function updateTable(round, player, total) {
         const tableBody = document.getElementById('diceResultsBody');
-
-        // Check if the row for the current round already exists
         let existingRow = Array.from(tableBody.rows).find(row => row.cells[0].innerText == round.toString());
 
         if (!existingRow) {
-            // Create a new row for the current round
             existingRow = document.createElement('tr');
             existingRow.innerHTML = `
                 <td>${round}</td>
@@ -371,31 +366,84 @@
             tableBody.appendChild(existingRow);
         }
 
-        // Use querySelector to get the exact cell
         const playerCell = existingRow.querySelector(`#player${player}-round${round}`);
         playerCell.innerText = total;
     }
 
     function updateTotals(scores) {
-        scores.forEach((score, index) => {
-            document.getElementById(`total${playerNames[index].replace(/\s+/g, '')}`).textContent = score;
+        let playerScores = scores.map((score, index) => ({
+            name: playerNames[index],
+            score: score,
+            originalIndex: index
+        }));
+
+        playerScores.sort((a, b) => b.score - a.score);
+        
+        const highestScore = playerScores[0].score;
+        playerScores.forEach((player, index) => {
+            player.rank = index + 1;
+            player.pointsNeeded = highestScore - player.score;
+        });
+
+        const totalRow = document.getElementById('totalRow');
+        totalRow.innerHTML = '<th>Total:</th>';
+        
+        const playerDataMap = new Map(playerScores.map(p => [p.name, p]));
+
+        playerNames.forEach(name => {
+            const playerData = playerDataMap.get(name);
+            const rankClass = playerData.rank === 1 ? 'winner' : 
+                            playerData.rank === 2 ? 'second' : 
+                            playerData.rank === 3 ? 'third' : '';
+            
+            // Continuing the updateTotals function:
+
+            const pointsNeededText = playerData.rank === 1 ? 
+                '(1st place)' : 
+                `(${playerData.rank}th place, -${playerData.pointsNeeded} pts)`;
+
+            totalRow.innerHTML += `
+                <th id="total${name.replace(/\s+/g, '')}" class="${rankClass}">
+                    ${playerData.score}<br>
+                    <small>${pointsNeededText}</small>
+                </th>`;
+        });
+
+        const scoreBoard = document.getElementById('scoreBoard');
+        scoreBoard.innerHTML = '';
+        playerScores.forEach(player => {
+            const pointsNeededText = player.rank === 1 ? 
+                '(1st place)' : 
+                `(${player.rank}th place, needs ${player.pointsNeeded} pts)`;
+                
+            scoreBoard.innerHTML += `
+                <div class="${player.rank === 1 ? 'winner' : ''}">
+                    ${player.name}: ${player.score} ${pointsNeededText}
+                </div>`;
         });
     }
 
-    // Download game data as JSON
     function downloadGameData() {
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(gameData));
         const downloadAnchorNode = document.createElement('a');
         downloadAnchorNode.setAttribute("href", dataStr);
         downloadAnchorNode.setAttribute("download", "game_data.json");
-        document.body.appendChild(downloadAnchorNode); // required for firefox
+        document.body.appendChild(downloadAnchorNode);
         downloadAnchorNode.click();
         downloadAnchorNode.remove();
     }
 
-    // New Game Button Click
     document.getElementById('newGameBtn').addEventListener('click', () => {
         location.reload();
+    });
+
+    window.addEventListener('load', () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const connectId = urlParams.get('connect');
+        if (connectId) {
+            document.getElementById('peer-id').value = connectId;
+            connectToPeer();
+        }
     });
 
     peer.on('error', (err) => {
