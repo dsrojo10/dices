@@ -120,7 +120,7 @@
         </div>
         <div class="dice-result" id="diceResult"></div>
         <button class="btn" id="logDiceBtn">Log Dice</button>
-        <button class="btn" id="clearLastDiceBtn">Clear Last Dice</button> <!-- Nuevo botón -->
+        <button class="btn" id="clearLastDiceBtn">Clear Last Dice</button>
         <table id="diceResultsTable">
             <thead>
                 <tr id="playerHeaders">
@@ -136,7 +136,7 @@
         </table>
     </div>
 
-    <div class="winner-message hidden" id="winnerMessage"></div> <!-- Mensaje del ganador -->
+    <div class="winner-message hidden" id="winnerMessage"></div>
 
     <div class="status" id="status">Estado: Inicializando...</div>
     <div class="connection-info">
@@ -155,6 +155,7 @@
         <button class="btn" id="downloadBtn">Download Game Data</button>
         <button class="btn" id="newGameSetupBtn">New Game (New Setup)</button>
         <button class="btn" id="replayBtn">Replay</button>
+        <!-- <button class="btn" id="goToIndex2Btn">Go to Index2</button> Botón añadido -->
     </div>
 </div>
 
@@ -226,6 +227,8 @@
                 document.querySelector('.dice-input').classList.remove('hidden');
                 updateGameStatus();
                 updateTotals(scores);
+            } else if (data.type === 'endGame') {
+                endGame(data.winner);
             }
         });
     }
@@ -240,6 +243,15 @@
                 round: currentRound,
                 player: currentPlayer,
                 total
+            });
+        }
+    }
+
+    function sendEndGame(winner) {
+        if (conn && conn.open) {
+            conn.send({
+                type: 'endGame',
+                winner
             });
         }
     }
@@ -363,6 +375,8 @@
             document.querySelector('.dice-input').classList.add('hidden');
             document.querySelector('.download').classList.remove('hidden');
             downloadGameData();
+
+            sendEndGame(winner); // Enviar información del ganador
         } else {
             updateGameStatus();
         }
@@ -385,6 +399,7 @@
         playerCell.innerText = total;
     }
 
+    // Función para calcular las posiciones de los jugadores, manejando empates
     function updateTotals(scores) {
         let playerScores = scores.map((score, index) => ({
             name: playerNames[index],
@@ -392,12 +407,17 @@
             originalIndex: index
         }));
 
+        // Ordenar los puntajes en orden descendente
         playerScores.sort((a, b) => b.score - a.score);
-        
-        const highestScore = playerScores[0].score;
+
+        // Manejar empates en las posiciones
+        let rank = 1;
         playerScores.forEach((player, index) => {
-            player.rank = index + 1;
-            player.pointsNeeded = highestScore - player.score;
+            if (index > 0 && player.score < playerScores[index - 1].score) {
+                rank = index + 1;
+            }
+            player.rank = rank;
+            player.pointsNeeded = playerScores[0].score - player.score;
         });
 
         const totalRow = document.getElementById('totalRow');
@@ -435,9 +455,7 @@
         });
     }
 
-    // Función para descargar los datos del juego
     function downloadGameData() {
-        // Determinar el ganador basado en el puntaje más alto
         const winnerIndex = scores.indexOf(Math.max(...scores));
         const winner = playerNames[winnerIndex];
 
@@ -450,7 +468,7 @@
                 forbiddenNumber: forbiddenNumber
             },
             rounds: gameData,
-            winner: winner // Incluyendo la información del ganador
+            winner: winner
         };
 
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData));
@@ -459,7 +477,7 @@
         downloadAnchorNode.setAttribute("download", `game_data_${Date.now()}.json`);
         document.body.appendChild(downloadAnchorNode);
         downloadAnchorNode.click();
-        downloadAnchorNode.remove();
+        document.body.removeChild(downloadAnchorNode);
     }
 
     // Event listener para el botón "New Game (New Setup)"
@@ -467,8 +485,6 @@
         location.reload(); // Recargar la página para una nueva configuración
     });
 
-    // Event listener para el botón "Replay"
-    document.getElementById('replayBtn').add
     // Event listener para el botón "Replay"
     document.getElementById('replayBtn').addEventListener('click', () => {
         // Reiniciar el juego con la configuración actual
@@ -482,6 +498,7 @@
         document.querySelector('.download').classList.add('hidden');
         document.querySelector('.game-display').classList.remove('hidden');
         document.querySelector('.dice-input').classList.remove('hidden');
+        document.getElementById('winnerMessage').classList.add('hidden'); // Ocultar el mensaje de ganador
         updateGameStatus();
         updateTotals(scores);
     });
@@ -528,20 +545,84 @@
     });
 
     // Función para finalizar el juego y mostrar el ganador claramente
-    function endGame() {
-        const winnerIndex = scores.indexOf(Math.max(...scores));
-        const winner = playerNames[winnerIndex];
-        alert(`Game Over! Winner: ${winner}`);
+    function endGame(winner) {
+        // Eliminar la línea de alerta
+        // alert(`Game Over! Winner: ${winner}`);
         
         // Mostrar el ganador en un elemento HTML
         const gameStatus = document.getElementById('gameStatus');
         gameStatus.innerHTML = `<h2 style="color: green;">Game Over! Winner: ${winner}</h2>`;
 
+        document.getElementById('winnerMessage').textContent = `Game Over! Winner: ${winner}`;
+        document.getElementById('winnerMessage').classList.remove('hidden');
         document.querySelector('.dice-input').classList.add('hidden');
         document.querySelector('.download').classList.remove('hidden');
         downloadGameData();
     }
-</script>
 
-</body>
-</html>
+    // Función para calcular las posiciones de los jugadores, manejando empates
+    function updateTotals(scores) {
+        let playerScores = scores.map((score, index) => ({
+            name: playerNames[index],
+            score: score,
+            originalIndex: index
+        }));
+
+        // Ordenar los puntajes en orden descendente
+        playerScores.sort((a, b) => b.score - a.score);
+
+        // Manejar empates en las posiciones
+        let rank = 1;
+        playerScores.forEach((player, index) => {
+            if (index > 0 && player.score < playerScores[index - 1].score) {
+                rank = index + 1;
+            }
+            player.rank = rank;
+        });
+
+        const highestScore = playerScores[0].score;
+
+        const totalRow = document.getElementById('totalRow');
+        totalRow.innerHTML = '<th>Total:</th>';
+        
+        const playerDataMap = new Map(playerScores.map(p => [p.name, p]));
+
+        playerNames.forEach(name => {
+            const playerData = playerDataMap.get(name);
+            const rankClass = playerData.rank === 1 ? 'first-place' : 
+                            playerData.rank === 2 ? 'second-place' : '';
+
+            const pointsNeededText = playerData.rank === 1 ? 
+                '(1st place)' : 
+                `(${playerData.rank}th place, -${highestScore - playerData.score} pts)`;
+
+            totalRow.innerHTML += `
+                <th id="total${name.replace(/\s+/g, '')}" class="${rankClass}">
+                    ${playerData.score}<br>
+                    <small>${pointsNeededText}</small>
+                </th>`;
+        });
+
+        const scoreBoard = document.getElementById('scoreBoard');
+        scoreBoard.innerHTML = '';
+        playerScores.forEach(player => {
+            const pointsNeededText = player.rank === 1 ? 
+                '(1st place)' : 
+                `(${player.rank}th place, needs ${highestScore - player.score} pts)`;
+                
+            scoreBoard.innerHTML += `
+                <div class="${player.rank === 1 ? 'winner' : ''}">
+                    ${player.name}: ${player.score} ${pointsNeededText}
+                </div>`;
+        });
+    }
+
+    // Agregar un botón para dirigir a la página index2.html
+    const goToIndex2Btn = document.createElement('button');
+    goToIndex2Btn.textContent = 'Go to Index2';
+    goToIndex2Btn.className = 'btn';
+    goToIndex2Btn.addEventListener('click', () => {
+        window.location.href = 'index2.html';
+    });
+    document.querySelector('.download').appendChild(goToIndex2Btn);
+</script>
