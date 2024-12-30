@@ -156,7 +156,6 @@
         <button class="btn" id="downloadBtn">Download Game Data</button>
         <button class="btn" id="newGameSetupBtn">New Game (New Setup)</button>
         <button class="btn" id="replayBtn">Replay</button>
-        <!-- <button class="btn" id="goToIndex2Btn">Go to Index2</button> Botón añadido -->
     </div>
 </div>
 
@@ -254,6 +253,8 @@
             console.warn('Connection closed');
         });
     }
+
+    // Funciones del juego
 
     function sendUpdate(total) {
         if (conn && conn.open) {
