@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Análisis de Juegos</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f7f7f7;
+            color: #333;
+        }
+
+        h1, h2 {
+            color: #333;
+        }
+
+        form {
+            margin-bottom: 20px;
+        }
+
+        .stats-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+
+        .stats-table th, .stats-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        .stats-table th {
+            background-color: #f2f2f2;
+            color: #333;
+        }
+
+        .stats-table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        .stats-table tr:hover {
+            background-color: #ddd;
+        }
+
+        #loading {
+            display: none;
+            font-weight: bold;
+            color: #ff0000;
+        }
+    </style>
+</head>
+<body>
+    <h1 id="title">Análisis de Juegos</h1>
+    <button onclick="changeLanguage('es')">Español</button>
+    <button onclick="changeLanguage('en')">English</button>
+    <form id="uploadForm">
+        <input type="file" id="fileInput" multiple>
+        <button type="submit" id="uploadButton">Subir</button>
+    </form>
+
+    <div id="loading">Cargando...</div>
+
+    <div id="output">
+        <h2 id="generalStatsTitle">Estadísticas Generales</h2>
+        <table id="generalStats" class="stats-table"></table>
+
+        <h2 id="playerStatsTitle">Estadísticas por Jugador</h2>
+        <table id="playerSummary" class="stats-table"></table>
+        <table id="playerConsistency" class="stats-table"></table>
+        <table id="winners" class="stats-table"></table>
+        <table id="zeroPercentage" class="stats-table"></table>
+
+        <h2 id="futurePredictionsTitle">Predicciones Futuras</h2>
+        <table id="futurePredictions" class="stats-table"></table>
+    </div>
+
+    <script>
+        const translations = {
+            es: {
+                title: "Análisis de Juegos",
+                uploadButton: "Subir",
+                generalStatsTitle: "Estadísticas Generales",
+                playerStatsTitle: "Estadísticas por Jugador",
+                futurePredictionsTitle: "Predicciones Futuras",
+                loading: "Cargando...",
+                generalStatsLabels: {
+                    totalGames: "Juegos Totales",
+                    totalRounds: "Rondas Totales",
+                    players: "Jugadores",
+                    diceFrequency: "Frecuencia de Dados",
+                    forbiddenFrequency: "Frecuencia Prohibida",
+                    forbiddenProbability: "Probabilidad Prohibida",
+                    averageTotalsPerRound: "Promedio de Totales por Ronda"
+                },
+                playerStatsLabels: {
+                    player: "Jugador",
+                    totalPoints: "Puntos Totales",
+                    averagePoints: "Puntos Promedio",
+                    roundsPlayed: "Rondas Jugadas",
+                    stdPoints: "Desviación Estándar de Puntos",
+                    gamesWon: "Juegos Ganados",
+                    zeroPercentage: "Porcentaje de Ceros"
+                },
+                futurePredictionsLabels: {
+                    player: "Jugador",
+                    roundsToCatchUp: "Rondas para Alcanzar"
+                }
+            },
+            en: {
+                title: "Game Analysis",
+                uploadButton: "Upload",
+                generalStatsTitle: "General Stats",
+                playerStatsTitle: "Player Stats",
+                futurePredictionsTitle: "Future Predictions",
+                loading: "Loading...",
+                generalStatsLabels: {
+                    totalGames: "Total Games",
+                    totalRounds: "Total Rounds",
+                    players: "Players",
+                    diceFrequency: "Dice Frequency",
+                    forbiddenFrequency: "Forbidden Frequency",
+                    forbiddenProbability: "Forbidden Probability",
+                    averageTotalsPerRound: "Average Totals Per Round"
+                },
+                playerStatsLabels: {
+                    player: "Player",
+                    totalPoints: "Total Points",
+                    averagePoints: "Average Points",
+                    roundsPlayed: "Rounds Played",
+                    stdPoints: "Standard Deviation of Points",
+                    gamesWon: "Games Won",
+                    zeroPercentage: "Zero Percentage"
+                },
+                futurePredictionsLabels: {
+                    player: "Player",
+                    roundsToCatchUp: "Rounds to Catch Up"
+                }
+            }
+        };
+
+        document.getElementById('fileInput').addEventListener('change', function () {
+            const loading = document.getElementById('loading');
+            const output = document.getElementById('output');
+
+            // Mostrar el mensaje de carga
+            loading.style.display = 'block';
+            output.style.display = 'none';
+        });
+
+        document.getElementById('uploadForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+            const files = document.getElementById('fileInput').files;
+            const gameData = [];
+            const loading = document.getElementById('loading');
+            const output = document.getElementById('output');
+
+            Array.from(files).forEach(file => {
+                const reader = new FileReader();
+                reader.onload = function (event) {
+                    const game = JSON.parse(event.target.result);
+                    game.rounds.forEach(roundData => {
+                        gameData.push({
+                            timestamp: game.timestamp,
+                            players: game.gameConfig.players,
+                            rounds: game.gameConfig.rounds,
+                            dice: game.gameConfig.dice,
+                            forbiddenNumber: game.gameConfig.forbiddenNumber,
+                            round: roundData.round,
+                            player: roundData.player,
+                            diceResults: roundData.diceResults,
+                            total: roundData.total,
+                            winner: game.winner || null
+                        });
+                    });
+                };
+                reader.readAsText(file);
+            });
+
+            setTimeout(() => {
+                analyzeData(gameData);
+                // Ocultar el mensaje de carga
+                loading.style.display = 'none';
+                output.style.display = 'block';
+            }, 1000); // Esperar a que se carguen todos los archivos
+        });
+
+        function analyzeData(gameData) {
+            const df = gameData;
+            const generalStats = analyzeGeneralStats(df);
+            const playerStats = analyzePlayerStats(df);
+            const futurePredictions = predictFuture(df, playerStats);
+
+            displayResults(generalStats, playerStats, futurePredictions);
+        }
+
+        function analyzeGeneralStats(df) {
+            const generalStats = {};
+            generalStats.totalGames = new Set(df.map(game => game.timestamp)).size;
+            generalStats.totalRounds = new Set(df.map(game => game.round)).size;
+            generalStats.players = [...new Set(df.map(game => game.player))];
+
+            const diceValues = df.flatMap(game => game.diceResults);
+            const diceFrequency = diceValues.reduce((acc, val) => {
+                acc[val] = (acc[val] || 0) + 1;
+                return acc;
+            }, {});
+            generalStats.diceFrequency = diceFrequency;
+
+            const forbiddenNumber = df[0].forbiddenNumber;
+            const forbiddenFrequency = diceValues.filter(val => val === forbiddenNumber).length;
+            generalStats.forbiddenFrequency = forbiddenFrequency;
+            generalStats.forbiddenProbability = forbiddenFrequency / diceValues.length;
+
+            const roundTotals = df.reduce((acc, game) => {
+                if (!acc[game.player]) acc[game.player] = [];
+                acc[game.player].push(game.total);
+                return acc;
+            }, {});
+            const averageTotalsPerRound = Object.entries(roundTotals).map(([player, totals]) => ({
+                player,
+                averageTotalPerRound: totals.reduce((a, b) => a + b, 0) / totals.length
+            }));
+            generalStats.averageTotalsPerRound = averageTotalsPerRound;
+
+            return generalStats;
+        }
+
+        function analyzePlayerStats(df) {
+            const playerStats = {};
+            const playerSummary = df.reduce((acc, game) => {
+                if (!acc[game.player]) acc[game.player] = { totalPoints: 0, roundsPlayed: 0 };
+                acc[game.player].totalPoints += game.total;
+                acc[game.player].roundsPlayed += 1;
+                return acc;
+            }, {});
+            playerStats.playerSummary = Object.entries(playerSummary).map(([player, stats]) => ({
+                player,
+                totalPoints: stats.totalPoints,
+                averagePoints: stats.totalPoints / stats.roundsPlayed,
+                roundsPlayed: stats.roundsPlayed
+            }));
+
+            const playerConsistency = df.reduce((acc, game) => {
+                if (!acc[game.player]) acc[game.player] = [];
+                acc[game.player].push(game.total);
+                return acc;
+            }, {});
+            playerStats.playerConsistency = Object.entries(playerConsistency).map(([player, totals]) => ({
+                player,
+                stdPoints: Math.sqrt(totals.reduce((a, b) => a + Math.pow(b - (totals.reduce((a, b) => a + b, 0) / totals.length), 2), 0) / totals.length)
+            }));
+
+            const winners = df.reduce((acc, game) => {
+                if (game.winner) {
+                    acc[game.winner] = (acc[game.winner] || 0) + 1;
+                }
+                return acc;
+            }, {});
+            playerStats.winners = Object.entries(winners).map(([player, gamesWon]) => ({ player, gamesWon }));
+
+            const zeroCounts = df.reduce((acc, game) => {
+                if (!acc[game.player]) acc[game.player] = 0;
+                if (game.total === 0) acc[game.player] += 1;
+                return acc;
+            }, {});
+            playerStats.zeroPercentage = Object.entries(zeroCounts).map(([player, count]) => ({
+                player,
+                zeroPercentage: count / df.filter(game => game.player === player).length
+            }));
+
+            return playerStats;
+        }
+
+        function predictFuture(df, playerStats) {
+            const predictions = {};
+            const playerAvgPoints = playerStats.playerSummary.reduce((acc, player) => {
+                acc[player.player] = player.averagePoints;
+                return acc;
+            }, {});
+            const currentTotals = playerStats.playerSummary.reduce((acc, player) => {
+                acc[player.player] = player.totalPoints;
+                return acc;
+            }, {});
+            const maxPoints = Math.max(...Object.values(currentTotals));
+            predictions.roundsToCatchUp = Object.entries(currentTotals).map(([player, total]) => ({
+                player,
+                roundsToCatchUp: playerAvgPoints[player] > 0 ? Math.max(0, (maxPoints - total) / playerAvgPoints[player]) : Infinity
+            }));
+            return predictions;
+        }
+
+        function displayResults(generalStats, playerStats, futurePredictions) {
+            displayGeneralStats(generalStats);
+            displayPlayerStats(playerStats);
+            displayFuturePredictions(futurePredictions);
+        }
+
+        function displayGeneralStats(generalStats) {
+            const table = document.getElementById('generalStats');
+            const labels = translations[currentLanguage].generalStatsLabels;
+            table.innerHTML = `
+                <tr><th>${labels.totalGames}</th><td>${generalStats.totalGames}</td></tr>
+                <tr><th>${labels.totalRounds}</th><td>${generalStats.totalRounds}</td></tr>
+                <tr><th>${labels.players}</th><td>${generalStats.players.join(', ')}</td></tr>
+                <tr><th>${labels.diceFrequency}</th>
+                    <td>
+                        <table class="stats-table">
+                            <tr><th>Valor del Dado</th><th>Frecuencia</th></tr>
+                            ${Object.entries(generalStats.diceFrequency).map(([diceValue, frequency]) => `
+                                <tr>
+                                    <td>${diceValue}</td>
+                                    <td>${frequency}</td>
+                                </tr>`).join('')}
+                        </table>
+                    </td>
+                </tr>
+                <tr><th>${labels.forbiddenFrequency}</th><td>${generalStats.forbiddenFrequency}</td></tr>
+                <tr><th>${labels.forbiddenProbability}</th><td>${generalStats.forbiddenProbability.toFixed(2)}</td></tr>
+                <tr><th>${labels.averageTotalsPerRound}</th>
+                    <td>
+                        <table class="stats-table">
+                            <tr><th>Jugador</th><th>Promedio Total por Ronda</th></tr>
+                            ${generalStats.averageTotalsPerRound.map(playerData => `
+                                <tr>
+                                    <td>${playerData.player}</td>
+                                    <td>${playerData.averageTotalPerRound.toFixed(2)}</td>
+                                </tr>`).join('')}
+                        </table>
+                    </td>
+                </tr>
+            `;
+        }
+
+        function displayPlayerStats(playerStats) {
+            const labels = translations[currentLanguage].playerStatsLabels;
+
+            const playerSummaryTable = document.getElementById('playerSummary');
+            playerSummaryTable.innerHTML = `
+                <tr><th>${labels.player}</th><th>${labels.totalPoints}</th><th>${labels.averagePoints}</th><th>${labels.roundsPlayed}</th></tr>
+                ${playerStats.playerSummary.map(stat => `
+                    <tr>
+                        <td>${stat.player}</td>
+                        <td>${stat.totalPoints}</td>
+                        <td>${stat.averagePoints.toFixed(2)}</td>
+                        <td>${stat.roundsPlayed}</td>
+                    </tr>
+                `).join('')}
+            `;
+
+            const playerConsistencyTable = document.getElementById('playerConsistency');
+            playerConsistencyTable.innerHTML = `
+                <tr><th>${labels.player}</th><th>${labels.stdPoints}</th></tr>
+                ${playerStats.playerConsistency.map(stat => `
+                    <tr>
+                        <td>${stat.player}</td>
+                        <td>${stat.stdPoints.toFixed(2)}</td>
+                    </tr>
+                `).join('')}
+            `;
+
+            const winnersTable = document.getElementById('winners');
+            winnersTable.innerHTML = `
+                <tr><th>${labels.player}</th><th>${labels.gamesWon}</th></tr>
+                ${playerStats.winners.map(stat => `
+                    <tr>
+                        <td>${stat.player}</td>
+                        <td>${stat.gamesWon}</td>
+                    </tr>
+                `).join('')}
+            `;
+
+            const zeroPercentageTable = document.getElementById('zeroPercentage');
+            zeroPercentageTable.innerHTML = `
+                <tr><th>${labels.player}</th><th>${labels.zeroPercentage}</th></tr>
+                ${playerStats.zeroPercentage.map(stat => `
+                    <tr>
+                        <td>${stat.player}</td>
+                        <td>${stat.zeroPercentage.toFixed(2)}</td>
+                    </tr>
+                `).join('')}
+            `;
+        }
+
+        function displayFuturePredictions(futurePredictions) {
+            const labels = translations[currentLanguage].futurePredictionsLabels;
+            const table = document.getElementById('futurePredictions');
+            table.innerHTML = `
+                <tr><th>${labels.player}</th><th>${labels.roundsToCatchUp}</th></tr>
+                ${futurePredictions.roundsToCatchUp.map(prediction => `
+                    <tr>
+                        <td>${prediction.player}</td>
+                        <td>${prediction.roundsToCatchUp.toFixed(2)}</td>
+                    </tr>
+                `).join('')}
+            `;
+        }
+
+        let currentLanguage = 'es';
+
+        function changeLanguage(lang) {
+            currentLanguage = lang;
+            document.getElementById('title').textContent = translations[lang].title;
+            document.getElementById('uploadButton').textContent = translations[lang].uploadButton;
+            document.getElementById('loading').textContent = translations[lang].loading;
+            document.getElementById('generalStatsTitle').textContent = translations[lang].generalStatsTitle;
+            document.getElementById('playerStatsTitle').textContent = translations[lang].playerStatsTitle;
+            document.getElementById('futurePredictionsTitle').textContent = translations[lang].futurePredictionsTitle;
+            // Update the table headers and data with the new language
+            if (gameData.length > 0) {
+                const generalStats = analyzeGeneralStats(gameData);
+                const playerStats = analyzePlayerStats(gameData);
+                const futurePredictions = predictFuture(gameData, playerStats);
+                displayResults(generalStats, playerStats, futurePredictions);
+            }
+        }
+
+        let gameData = [];
+    </script>
+</body>
+</html>

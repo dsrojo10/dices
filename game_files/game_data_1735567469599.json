@@ -1,0 +1,1 @@
+{"timestamp":"2024-12-30T14:04:29.599Z","gameConfig":{"players":2,"rounds":2,"dice":2,"forbiddenNumber":1},"rounds":[{"round":1,"player":"da","diceResults":[3,2],"total":5},{"round":1,"player":"se","diceResults":[4,5],"total":9},{"round":2,"player":"da","diceResults":[6,2],"total":8},{"round":2,"player":"se","diceResults":[4,4],"total":8}],"winner":"se"}
