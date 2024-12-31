@@ -69,8 +69,8 @@
         .winner { background-color: #e8f5e9; }
         .second { background-color: #f5f5f5; }
         .third { background-color: #fafafa; }
-        .first-place { background-color: #a8e6cf; } /* Color verde más fuerte para el primero */
-        .second-place { background-color: #ffeb3b; } /* Color amarillo más fuerte para el segundo */
+        .first-place { background-color: #a8e6cf; }
+        .second-place { background-color: #ffeb3b; }
         .winner-message {
             font-size: 2em;
             font-weight: bold;
@@ -156,7 +156,6 @@
         <button class="btn" id="downloadBtn">Download Game Data</button>
         <button class="btn" id="newGameSetupBtn">New Game (New Setup)</button>
         <button class="btn" id="replayBtn">Replay</button>
-        <!-- <button class="btn" id="goToIndex2Btn">Go to Index2</button> Botón añadido -->
     </div>
 </div>
 
@@ -172,7 +171,22 @@
         return Math.random().toString(36).substr(2, 6);
     }
 
-    const peer = new Peer(generateShortId());
+    const peer = new Peer(generateShortId(), {
+        host: '0.peerjs.com',
+        port: 443,
+        path: '/',
+        secure: true,
+        config: {
+            'iceServers': [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' },
+                { urls: 'stun:stun3.l.google.com:19302' },
+                { urls: 'stun:stun4.l.google.com:19302' }
+            ]
+        },
+        debug: 3
+    });
 
     peer.on('open', (id) => {
         const displayId = id;
@@ -185,6 +199,7 @@
         document.getElementById('qrcode').innerHTML = qr.createImgTag(5);
         
         document.getElementById('status').textContent = 'Estado: Listo para conectar';
+        console.log('PeerJS connection opened with ID:', id);
     });
 
     peer.on('connection', (connection) => {
@@ -196,30 +211,89 @@
     });
 
     function connectToPeer() {
-        const peerId = document.getElementById('peer-id').value;
-        conn = peer.connect(peerId);
-        setupConnection();
+        const peerId = document.getElementById('peer-id').value.trim();
+        if (!peerId) {
+            alert('Por favor ingrese un ID válido');
+            return;
+        }
+
+        document.getElementById('status').textContent = 'Estado: Intentando conectar...';
+        
+        try {
+            conn = peer.connect(peerId, {
+                reliable: true,
+                serialization: 'json'
+            });
+            setupConnection();
+        } catch (error) {
+            console.error('Error al intentar conectar:', error);
+            document.getElementById('status').textContent = 'Estado: Error al conectar';
+        }
     }
 
     function setupConnection() {
+        if (!conn) {
+            console.error('No hay conexión disponible');
+            return;
+        }
+
         conn.on('open', () => {
             isConnected = true;
             document.getElementById('status').textContent = 'Estado: Conectado!';
+            console.log('Conexión establecida exitosamente');
+            
             if (!isHost) {
                 document.querySelector('.dice-input').classList.remove('hidden');
                 document.querySelector('.game-display').classList.remove('hidden');
             }
         });
 
+        conn.on('error', (err) => {
+            console.error('Error en la conexión:', err);
+            document.getElementById('status').textContent = `Error: ${err.type || 'Error de conexión'}`;
+            isConnected = false;
+        });
+
+        conn.on('close', () => {
+            console.log('Conexión cerrada');
+            document.getElementById('status').textContent = 'Estado: Conexión cerrada';
+            isConnected = false;
+            
+            // Intento de reconexión
+            setTimeout(() => {
+                if (!isConnected && conn) {
+                    console.log('Intentando reconectar...');
+                    connectToPeer();
+                }
+            }, 5000);
+        });
+
         conn.on('data', (data) => {
-            if (data.type === 'diceResult') {
+            console.log('Datos recibidos:', data);
+            try {
+                handleGameData(data);
+            } catch (error) {
+                console.error('Error al procesar datos:', error);
+            }
+        });
+    }
+
+    function handleGameData(data) {
+        if (!data || !data.type) {
+            console.error('Datos inválidos recibidos');
+            return;
+        }
+
+        switch (data.type) {
+            case 'diceResult':
                 scores = data.scores;
                 currentRound = data.currentRound;
                 currentPlayer = data.currentPlayer;
                 updateTable(data.round, data.player, data.total);
                 updateTotals(data.scores);
                 updateGameStatus();
-            } else if (data.type === 'startGame') {
+                break;
+            case 'startGame':
                 startGame(data.config);
                 playerNames = data.playerNames;
                 setupHeadersAndTotals();
@@ -228,10 +302,13 @@
                 document.querySelector('.dice-input').classList.remove('hidden');
                 updateGameStatus();
                 updateTotals(scores);
-            } else if (data.type === 'endGame') {
+                break;
+            case 'endGame':
                 endGame(data.winner);
-            }
-        });
+                break;
+            default:
+                console.warn('Tipo de datos desconocido:', data.type);
+        }
     }
 
     function sendUpdate(total) {
@@ -324,306 +401,245 @@
         });
     }
 
-    function updateGameStatus() {
-        document.getElementById('gameStatus').innerHTML = `Round: ${currentRound} / ${numRounds}, Player: ${playerNames[currentPlayer - 1]}`;
-        document.getElementById('inputGameStatus').innerHTML = `Round: ${currentRound}, Player: ${playerNames[currentPlayer - 1]}`;
+function updateGameStatus() {
+    document.getElementById('gameStatus').innerHTML = `Round: ${currentRound} / ${numRounds}, Player: ${playerNames[currentPlayer - 1]}`;
+    document.getElementById('inputGameStatus').innerHTML = `Round: ${currentRound}, Player: ${playerNames[currentPlayer - 1]}`;
+}
+
+function addDiceResult(value) {
+    if (diceResults.length < numDice) {
+        diceResults.push(value);
+        document.getElementById('diceResult').innerHTML = diceResults.map(num => `<div>${num}</div>`).join('');
+    }
+}
+
+document.getElementById('logDiceBtn').addEventListener('click', () => {
+    if (diceResults.length !== numDice) {
+        alert(`Please select ${numDice} dice results.`);
+        return;
     }
 
-    function addDiceResult(value) {
-        if (diceResults.length < numDice) {
-            diceResults.push(value);
-            document.getElementById('diceResult').innerHTML = diceResults.map(num => `<div>${num}</div>`).join('');
-        }
+    let total = diceResults.includes(forbiddenNumber) ? 0 : diceResults.reduce((a, b) => a + b, 0);
+    
+    if (total !== 0) {
+        scores[currentPlayer - 1] += total;
     }
 
-    document.getElementById('logDiceBtn').addEventListener('click', () => {
-        if (diceResults.length !== numDice) {
-            alert(`Please select ${numDice} dice results.`);
-            return;
-        }
+    updateTable(currentRound, currentPlayer, total);
+    updateTotals(scores);
 
-        let total = diceResults.includes(forbiddenNumber) ? 0 : diceResults.reduce((a, b) => a + b, 0);
-        
-        if (total !== 0) {
-            scores[currentPlayer - 1] += total;
-        }
-
-        updateTable(currentRound, currentPlayer, total);
-        updateTotals(scores);
-
-        gameData.push({
-            round: currentRound,
-            player: playerNames[currentPlayer - 1],
-            diceResults: [...diceResults],
-            total: total
-        });
-
-        sendUpdate(total);
-
-        currentPlayer++;
-        if (currentPlayer > numPlayers) {
-            currentPlayer = 1;
-            currentRound++;
-        }
-
-        diceResults = [];
-        document.getElementById('diceResult').innerHTML = '';
-
-        if (currentRound > numRounds) {
-            const winner = playerNames[scores.indexOf(Math.max(...scores))];
-            document.getElementById('winnerMessage').textContent = `Game Over! Winner: ${winner}`;
-            document.getElementById('winnerMessage').classList.remove('hidden');
-            document.querySelector('.dice-input').classList.add('hidden');
-            document.querySelector('.download').classList.remove('hidden');
-            downloadGameData();
-
-            sendEndGame(winner); // Enviar información del ganador
-        } else {
-            updateGameStatus();
-        }
+    gameData.push({
+        round: currentRound,
+        player: playerNames[currentPlayer - 1],
+        diceResults: [...diceResults],
+        total: total
     });
 
-    function updateTable(round, player, total) {
-        const tableBody = document.getElementById('diceResultsBody');
-        let existingRow = Array.from(tableBody.rows).find(row => row.cells[0].innerText == round.toString());
+    sendUpdate(total);
 
-        if (!existingRow) {
-            existingRow = document.createElement('tr');
-            existingRow.innerHTML = `
-                <td>${round}</td>
-                ${Array(numPlayers).fill(0).map((_, i) => `<td id="player${i + 1}-round${round}">0</td>`).join('')}
-            `;
-            tableBody.appendChild(existingRow);
-        }
-
-        const playerCell = existingRow.querySelector(`#player${player}-round${round}`);
-        playerCell.innerText = total;
-    }
-
-    // Función para calcular las posiciones de los jugadores, manejando empates
-    function updateTotals(scores) {
-        let playerScores = scores.map((score, index) => ({
-            name: playerNames[index],
-            score: score,
-            originalIndex: index
-        }));
-
-        // Ordenar los puntajes en orden descendente
-        playerScores.sort((a, b) => b.score - a.score);
-
-        // Manejar empates en las posiciones
-        let rank = 1;
-        playerScores.forEach((player, index) => {
-            if (index > 0 && player.score < playerScores[index - 1].score) {
-                rank = index + 1;
-            }
-            player.rank = rank;
-            player.pointsNeeded = playerScores[0].score - player.score;
-        });
-
-        const totalRow = document.getElementById('totalRow');
-        totalRow.innerHTML = '<th>Total:</th>';
-        
-        const playerDataMap = new Map(playerScores.map(p => [p.name, p]));
-
-        playerNames.forEach(name => {
-            const playerData = playerDataMap.get(name);
-            const rankClass = playerData.rank === 1 ? 'first-place' : 
-                            playerData.rank === 2 ? 'second-place' : '';
-
-            const pointsNeededText = playerData.rank === 1 ? 
-                '(1st place)' : 
-                `(${playerData.rank}th place, -${playerData.pointsNeeded} pts)`;
-
-            totalRow.innerHTML += `
-                <th id="total${name.replace(/\s+/g, '')}" class="${rankClass}">
-                    ${playerData.score}<br>
-                    <small>${pointsNeededText}</small>
-                </th>`;
-        });
-
-        const scoreBoard = document.getElementById('scoreBoard');
-        scoreBoard.innerHTML = '';
-        playerScores.forEach(player => {
-            const pointsNeededText = player.rank === 1 ? 
-                '(1st place)' : 
-                `(${player.rank}th place, needs ${player.pointsNeeded} pts)`;
-                
-            scoreBoard.innerHTML += `
-                <div class="${player.rank === 1 ? 'winner' : ''}">
-                    ${player.name}: ${player.score} ${pointsNeededText}
-                </div>`;
-        });
-    }
-
-    function downloadGameData() {
-        const winnerIndex = scores.indexOf(Math.max(...scores));
-        const winner = playerNames[winnerIndex];
-
-        const exportData = {
-            timestamp: new Date().toISOString(),
-            gameConfig: {
-                players: numPlayers,
-                rounds: numRounds,
-                dice: numDice,
-                forbiddenNumber: forbiddenNumber
-            },
-            rounds: gameData,
-            winner: winner
-        };
-
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData));
-        const downloadAnchorNode = document.createElement('a');
-        downloadAnchorNode.setAttribute("href", dataStr);
-        downloadAnchorNode.setAttribute("download", `game_data_${Date.now()}.json`);
-        document.body.appendChild(downloadAnchorNode);
-        downloadAnchorNode.click();
-        document.body.removeChild(downloadAnchorNode);
-    }
-
-    // Event listener para el botón "New Game (New Setup)"
-    document.getElementById('newGameSetupBtn').addEventListener('click', () => {
-        location.reload(); // Recargar la página para una nueva configuración
-    });
-
-    // Event listener para el botón "Replay"
-    document.getElementById('replayBtn').addEventListener('click', () => {
-        // Reiniciar el juego con la configuración actual
-        resetGameData();
-        startGame({
-            numPlayers: numPlayers,
-            numRounds: numRounds,
-            numDice: numDice,
-            forbiddenNumber: forbiddenNumber
-        });
-        document.querySelector('.download').classList.add('hidden');
-        document.querySelector('.game-display').classList.remove('hidden');
-        document.querySelector('.dice-input').classList.remove('hidden');
-        document.getElementById('winnerMessage').classList.add('hidden'); // Ocultar el mensaje de ganador
-        updateGameStatus();
-        updateTotals(scores);
-    });
-
-    // Función para reiniciar los datos del juego
-    function resetGameData() {
-        currentRound = 1;
+    currentPlayer++;
+    if (currentPlayer > numPlayers) {
         currentPlayer = 1;
-        scores = Array(numPlayers).fill(0);
-        diceResults = [];
-        gameData = [];
-
-        // Limpiar la UI
-        document.getElementById('diceResult').innerHTML = '';
-        document.getElementById('diceResultsBody').innerHTML = '';
-        updateTotals(scores);
-        const playerHeaders = document.getElementById('playerHeaders');
-        playerHeaders.innerHTML = '<th>Turno</th>';
-        playerNames.forEach(name => {
-            playerHeaders.innerHTML += `<th>${name}</th>`;
-        });
+        currentRound++;
     }
 
-    // Event listener para el botón "Clear Last Dice"
-    document.getElementById('clearLastDiceBtn').addEventListener('click', () => {
-        if (diceResults.length > 0) {
-            diceResults.pop(); // Eliminar el último resultado de dados
-            document.getElementById('diceResult').innerHTML = diceResults.map(num => `<div>${num}</div>`).join(''); // Actualizar la visualización
-        }
-    });
+    diceResults = [];
+    document.getElementById('diceResult').innerHTML = '';
 
-    window.addEventListener('load', () => {
-        const urlParams = new URLSearchParams(window.location.search);
-        const connectId = urlParams.get('connect');
-        if (connectId) {
-            document.getElementById('peer-id').value = connectId;
-            connectToPeer();
-        }
-    });
-
-    peer.on('error', (err) => {
-        document.getElementById('status').textContent = `Error: ${err.type}`;
-        console.error(err);
-    });
-
-    // Función para finalizar el juego y mostrar el ganador claramente
-    function endGame(winner) {
-        // Eliminar la línea de alerta
-        // alert(`Game Over! Winner: ${winner}`);
-        
-        // Mostrar el ganador en un elemento HTML
-        const gameStatus = document.getElementById('gameStatus');
-        gameStatus.innerHTML = `<h2 style="color: green;">Game Over! Winner: ${winner}</h2>`;
-
+    if (currentRound > numRounds) {
+        const winner = playerNames[scores.indexOf(Math.max(...scores))];
         document.getElementById('winnerMessage').textContent = `Game Over! Winner: ${winner}`;
         document.getElementById('winnerMessage').classList.remove('hidden');
         document.querySelector('.dice-input').classList.add('hidden');
         document.querySelector('.download').classList.remove('hidden');
         downloadGameData();
+
+        sendEndGame(winner);
+    } else {
+        updateGameStatus();
+    }
+});
+
+function updateTable(round, player, total) {
+    const tableBody = document.getElementById('diceResultsBody');
+    let existingRow = Array.from(tableBody.rows).find(row => row.cells[0].innerText == round.toString());
+
+    if (!existingRow) {
+        existingRow = document.createElement('tr');
+        existingRow.innerHTML = `
+            <td>${round}</td>
+            ${Array(numPlayers).fill(0).map((_, i) => `<td id="player${i + 1}-round${round}">0</td>`).join('')}
+        `;
+        tableBody.appendChild(existingRow);
     }
 
-    // Función para calcular las posiciones de los jugadores, manejando empates
-    function updateTotals(scores) {
-        let playerScores = scores.map((score, index) => ({
-            name: playerNames[index],
-            score: score,
-            originalIndex: index
-        }));
+    const playerCell = existingRow.querySelector(`#player${player}-round${round}`);
+    playerCell.innerText = total;
+}
 
-        // Ordenar los puntajes en orden descendente
-        playerScores.sort((a, b) => b.score - a.score);
+function updateTotals(scores) {
+    let playerScores = scores.map((score, index) => ({
+        name: playerNames[index],
+        score: score,
+        originalIndex: index
+    }));
 
-        // Manejar empates en las posiciones
-        let rank = 1;
-        playerScores.forEach((player, index) => {
-            if (index > 0 && player.score < playerScores[index - 1].score) {
-                rank = index + 1;
-            }
-            player.rank = rank;
-        });
+    playerScores.sort((a, b) => b.score - a.score);
 
-        const highestScore = playerScores[0].score;
-
-        const totalRow = document.getElementById('totalRow');
-        totalRow.innerHTML = '<th>Total:</th>';
-        
-        const playerDataMap = new Map(playerScores.map(p => [p.name, p]));
-
-        playerNames.forEach(name => {
-            const playerData = playerDataMap.get(name);
-            const rankClass = playerData.rank === 1 ? 'first-place' : 
-                            playerData.rank === 2 ? 'second-place' : '';
-
-            const pointsNeededText = playerData.rank === 1 ? 
-                '(1st place)' : 
-                `(${playerData.rank}th place, -${highestScore - playerData.score} pts)`;
-
-            totalRow.innerHTML += `
-                <th id="total${name.replace(/\s+/g, '')}" class="${rankClass}">
-                    ${playerData.score}<br>
-                    <small>${pointsNeededText}</small>
-                </th>`;
-        });
-
-        const scoreBoard = document.getElementById('scoreBoard');
-        scoreBoard.innerHTML = '';
-        playerScores.forEach(player => {
-            const pointsNeededText = player.rank === 1 ? 
-                '(1st place)' : 
-                `(${player.rank}th place, needs ${highestScore - player.score} pts)`;
-                
-            scoreBoard.innerHTML += `
-                <div class="${player.rank === 1 ? 'winner' : ''}">
-                    ${player.name}: ${player.score} ${pointsNeededText}
-                </div>`;
-        });
-    }
-
-    // Agregar un botón para dirigir a la página index2.html
-    const goToIndex2Btn = document.createElement('button');
-    goToIndex2Btn.textContent = 'Go to Index2';
-    goToIndex2Btn.className = 'btn';
-    goToIndex2Btn.addEventListener('click', () => {
-        window.location.href = 'index2.html';
+    let rank = 1;
+    playerScores.forEach((player, index) => {
+        if (index > 0 && player.score < playerScores[index - 1].score) {
+            rank = index + 1;
+        }
+        player.rank = rank;
+        player.pointsNeeded = playerScores[0].score - player.score;
     });
-    document.querySelector('.download').appendChild(goToIndex2Btn);
+
+    const totalRow = document.getElementById('totalRow');
+    totalRow.innerHTML = '<th>Total:</th>';
+    
+    const playerDataMap = new Map(playerScores.map(p => [p.name, p]));
+
+    playerNames.forEach(name => {
+        const playerData = playerDataMap.get(name);
+        const rankClass = playerData.rank === 1 ? 'first-place' : 
+                        playerData.rank === 2 ? 'second-place' : '';
+
+        const pointsNeededText = playerData.rank === 1 ? 
+            '(1st place)' : 
+            `(${playerData.rank}th place, -${playerData.pointsNeeded} pts)`;
+
+        totalRow.innerHTML += `
+            <th id="total${name.replace(/\s+/g, '')}" class="${rankClass}">
+                ${playerData.score}<br>
+                <small>${pointsNeededText}</small>
+            </th>`;
+    });
+
+    const scoreBoard = document.getElementById('scoreBoard');
+    scoreBoard.innerHTML = '';
+    playerScores.forEach(player => {
+        const pointsNeededText = player.rank === 1 ? 
+            '(1st place)' : 
+            `(${player.rank}th place, needs ${player.pointsNeeded} pts)`;
+            
+        scoreBoard.innerHTML += `
+            <div class="${player.rank === 1 ? 'winner' : ''}">
+                ${player.name}: ${player.score} ${pointsNeededText}
+            </div>`;
+    });
+}
+
+function downloadGameData() {
+    const winnerIndex = scores.indexOf(Math.max(...scores));
+    const winner = playerNames[winnerIndex];
+
+    const exportData = {
+        timestamp: new Date().toISOString(),
+        gameConfig: {
+            players: numPlayers,
+            rounds: numRounds,
+            dice: numDice,
+            forbiddenNumber: forbiddenNumber
+        },
+        rounds: gameData,
+        winner: winner
+    };
+
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", `game_data_${Date.now()}.json`);
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    document.body.removeChild(downloadAnchorNode);
+}
+
+document.getElementById('newGameSetupBtn').addEventListener('click', () => {
+    location.reload();
+});
+
+document.getElementById('replayBtn').addEventListener('click', () => {
+    resetGameData();
+    startGame({
+        numPlayers: numPlayers,
+        numRounds: numRounds,
+        numDice: numDice,
+        forbiddenNumber: forbiddenNumber
+    });
+    document.querySelector('.download').classList.add('hidden');
+    document.querySelector('.game-display').classList.remove('hidden');
+    document.querySelector('.dice-input').classList.remove('hidden');
+    document.getElementById('winnerMessage').classList.add('hidden');
+    updateGameStatus();
+    updateTotals(scores);
+});
+
+function resetGameData() {
+    currentRound = 1;
+    currentPlayer = 1;
+    scores = Array(numPlayers).fill(0);
+    diceResults = [];
+    gameData = [];
+
+    document.getElementById('diceResult').innerHTML = '';
+    document.getElementById('diceResultsBody').innerHTML = '';
+    updateTotals(scores);
+    const playerHeaders = document.getElementById('playerHeaders');
+    playerHeaders.innerHTML = '<th>Turno</th>';
+    playerNames.forEach(name => {
+        playerHeaders.innerHTML += `<th>${name}</th>`;
+    });
+}
+
+document.getElementById('clearLastDiceBtn').addEventListener('click', () => {
+    if (diceResults.length > 0) {
+        diceResults.pop();
+        document.getElementById('diceResult').innerHTML = diceResults.map(num => `<div>${num}</div>`).join('');
+    }
+});
+
+function endGame(winner) {
+    const gameStatus = document.getElementById('gameStatus');
+    gameStatus.innerHTML = `<h2 style="color: green;">Game Over! Winner: ${winner}</h2>`;
+
+    document.getElementById('winnerMessage').textContent = `Game Over! Winner: ${winner}`;
+    document.getElementById('winnerMessage').classList.remove('hidden');
+    document.querySelector('.dice-input').classList.add('hidden');
+    document.querySelector('.download').classList.remove('hidden');
+    downloadGameData();
+}
+
+peer.on('disconnected', () => {
+    console.log('Peer desconectado del servidor');
+    document.getElementById('status').textContent = 'Estado: Desconectado';
+    
+    setTimeout(() => {
+        if (!peer.destroyed) {
+            peer.reconnect();
+        }
+    }, 5000);
+});
+
+peer.on('error', (err) => {
+    console.error('Error en peer:', err);
+    document.getElementById('status').textContent = `Error: ${err.type || 'Error desconocido'}`;
+    
+    if (err.type === 'peer-unavailable') {
+        alert('El ID ingresado no está disponible o no existe');
+    } else if (err.type === 'network') {
+        alert('Error de red. Por favor revise su conexión');
+    }
+});
+
+window.addEventListener('load', () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const connectId = urlParams.get('connect');
+    if (connectId) {
+        document.getElementById('peer-id').value = connectId;
+        connectToPeer();
+    }
+});
 </script>
+</body>
+</html>
